@@ -30,11 +30,13 @@ export interface Department {
 export interface Ward {
   id: string;
   department_id: string;
+  departmentId?: string;
   department_name?: string;
   name: string;
   code: string;
   floor?: string;
   bed_capacity: number;
+  bedCapacity?: number;
   status?: string;
   active_staff_count?: number;
 }
@@ -215,6 +217,7 @@ export interface StockRequest {
   ward_name?: string;
   requested_by: string;
   requested_by_name?: string;
+  requester_name?: string;
   requested_by_emp_id?: string;
   status: 'Pending' | 'Approved' | 'Partially Approved' | 'Rejected' | 'Fulfilled';
   urgency: 'Normal' | 'Urgent' | 'Emergency';

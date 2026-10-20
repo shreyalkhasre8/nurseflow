@@ -174,6 +174,19 @@ export const api = {
     const query = new URLSearchParams(params).toString();
     return request<any[]>(`/inventory/transactions${query ? `?${query}` : ''}`);
   },
+  validateInventoryCsv: (rows: any[]) =>
+    request<{ totalRows: number; validCount: number; errorCount: number; errors: any[]; preview: any[] }>(
+      '/inventory/import/validate',
+      {
+        method: 'POST',
+        body: JSON.stringify({ rows }),
+      }
+    ),
+  confirmInventoryCsv: (items: any[]) =>
+    request<{ success: boolean; message: string; importedCount: number }>('/inventory/import/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    }),
 
   // Stock Requests
   getStockRequests: (params?: Record<string, string>) => {
@@ -263,6 +276,32 @@ export const api = {
     return request<any[]>(`/reports/inventory-consumption${query ? `?${query}` : ''}`);
   },
   getHandoverComplianceReport: () => request<any[]>('/reports/handover-compliance'),
+  getOverdueTasksReport: (params?: Record<string, string>) => {
+    const query = new URLSearchParams(params).toString();
+    return request<any[]>(`/reports/overdue-tasks${query ? `?${query}` : ''}`);
+  },
+  getInventoryAlertsReport: () => request<{ lowStockItems: any[]; nearExpiryBatches: any[]; expiredBatches: any[] }>('/reports/inventory-alerts'),
+  getStockMovementReport: (params?: Record<string, string>) => {
+    const query = new URLSearchParams(params).toString();
+    return request<{ summaryByType: any[]; recentMovements: any[] }>(`/reports/stock-movement${query ? `?${query}` : ''}`);
+  },
+
+  // Patients (Census & Bed Occupancy)
+  getPatients: (params?: Record<string, string>) => {
+    const query = new URLSearchParams(params).toString();
+    return request<any[]>(`/patients${query ? `?${query}` : ''}`);
+  },
+  getPatientById: (id: string) => request<any>(`/patients/${id}`),
+  createPatient: (data: any) =>
+    request<{ id: string; message: string }>('/patients', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updatePatient: (id: string, data: any) =>
+    request<{ message: string }>(`/patients/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 
   // Admin
   getUsers: (params?: Record<string, string>) => {

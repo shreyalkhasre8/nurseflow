@@ -68,6 +68,33 @@ export function assignShift(req: AuthenticatedRequest, res: Response) {
       return res.status(400).json({ error: 'Shift, staff, ward, and date are required.' });
     }
 
+    // Check staff availability status (e.g. ON_LEAVE, SICK, UNAVAILABLE)
+    const availability = db.prepare(`
+      SELECT status, reason FROM staff_availability
+      WHERE user_id = ? AND date = ?
+    `).get(userId, date) as any;
+
+    if (availability && ['ON_LEAVE', 'SICK', 'UNAVAILABLE', 'OFF_DUTY'].includes(availability.status)) {
+      return res.status(400).json({
+        error: `Cannot assign shift: Staff nurse is marked as ${availability.status.replace('_', ' ')}${availability.reason ? ` (${availability.reason})` : ''} on ${date}.`
+      });
+    }
+
+    // Check for double-booking conflict on same date
+    const existingDuty = db.prepare(`
+      SELECT sa.id, s.name as shift_name, w.name as ward_name
+      FROM shift_assignments sa
+      JOIN shifts s ON sa.shift_id = s.id
+      JOIN wards w ON sa.ward_id = w.id
+      WHERE sa.user_id = ? AND sa.date = ?
+    `).get(userId, date) as any;
+
+    if (existingDuty) {
+      return res.status(400).json({
+        error: `Schedule conflict: Staff nurse is already assigned to ${existingDuty.shift_name} at ${existingDuty.ward_name} on ${date}.`
+      });
+    }
+
     const id = crypto.randomUUID();
     db.prepare(`
       INSERT INTO shift_assignments (id, shift_id, user_id, ward_id, date, status, notes)

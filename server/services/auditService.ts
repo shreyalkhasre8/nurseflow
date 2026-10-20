@@ -5,7 +5,7 @@ export interface AuditLogInput {
   userId?: string | null;
   action: string;
   entity: string;
-  recordId?: string | null;
+  recordId?: string | string[] | null;
   details?: any;
   ipAddress?: string;
 }
@@ -14,6 +14,7 @@ export function logAudit(input: AuditLogInput) {
   try {
     const id = crypto.randomUUID();
     const detailsStr = typeof input.details === 'object' ? JSON.stringify(input.details) : (input.details || null);
+    const recId = Array.isArray(input.recordId) ? input.recordId.join(',') : (input.recordId || null);
     
     const stmt = db.prepare(`
       INSERT INTO audit_logs (id, user_id, action, entity, record_id, details, ip_address)
@@ -25,7 +26,7 @@ export function logAudit(input: AuditLogInput) {
       input.userId || null,
       input.action,
       input.entity,
-      input.recordId || null,
+      recId,
       detailsStr,
       input.ipAddress || '127.0.0.1'
     );

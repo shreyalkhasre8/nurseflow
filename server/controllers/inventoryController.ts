@@ -472,3 +472,210 @@ export function getTransactions(req: AuthenticatedRequest, res: Response) {
     return res.status(500).json({ error: 'Failed to fetch transaction ledger' });
   }
 }
+
+export function downloadCsvTemplate(req: AuthenticatedRequest, res: Response) {
+  const templateCsv = `code,name,category,unit,min_stock,cost_per_unit,description
+SURG-SCIS-01,Metzenbaum Curved Scissors 18cm,Surgical,Pieces,10,320.00,Aseptic surgical dissection scissors
+PHARM-AML-05,Amlodipine 5mg Tablets,Pharmaceuticals,Strips,100,28.50,Calcium channel blocker for hypertensive care
+CONS-GAUZ-01,Sterile Paraffin Gauze Dressing 10x10cm,Consumables,Packs,50,45.00,Non-adherent tulle gras dressing for burn wounds
+PPE-SHIELD-01,Anti-Fog Full Face Visor Shield,PPE,Pieces,40,65.00,Splash protection shield with foam headband`;
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="nurseflow_inventory_template.csv"');
+  return res.send(templateCsv);
+}
+
+export function validateCsvImport(req: AuthenticatedRequest, res: Response) {
+  try {
+    const { rows } = req.body;
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ error: 'No rows provided for validation' });
+    }
+
+    const validCategories = ['Pharmaceuticals', 'Consumables', 'Surgical', 'PPE', 'Equipment'];
+    const validUnits = ['Pieces', 'Boxes', 'Vials', 'Ampoules', 'Bottles', 'Packs', 'Pairs', 'Strips', 'Rolls'];
+
+    const errors: Array<{ rowNumber: number; itemCode: string; field: string; message: string }> = [];
+    const validRows: any[] = [];
+    const seenCodes = new Set<string>();
+
+    // Pre-fetch all existing item codes
+    const existingCodes = new Set(
+      (db.prepare(`SELECT code FROM inventory_items`).all() as any[]).map((r) => r.code.toUpperCase())
+    );
+
+    rows.forEach((row: any, idx: number) => {
+      const rowNum = idx + 1;
+      const code = (row.code || '').trim().toUpperCase();
+      const name = (row.name || '').trim();
+      const category = (row.category || '').trim();
+      const unit = (row.unit || '').trim();
+      const minStock = parseInt(row.min_stock ?? row.minStock ?? 10, 10);
+      const costPerUnit = parseFloat(row.cost_per_unit ?? row.costPerUnit ?? 0);
+      const description = (row.description || '').trim();
+
+      let hasRowError = false;
+
+      if (!code) {
+        errors.push({ rowNumber: rowNum, itemCode: 'N/A', field: 'code', message: 'Item code is required' });
+        hasRowError = true;
+      } else if (existingCodes.has(code)) {
+        errors.push({ rowNumber: rowNum, itemCode: code, field: 'code', message: `Item code '${code}' already exists in database` });
+        hasRowError = true;
+      } else if (seenCodes.has(code)) {
+        errors.push({ rowNumber: rowNum, itemCode: code, field: 'code', message: `Duplicate item code '${code}' found in CSV` });
+        hasRowError = true;
+      }
+
+      if (!name) {
+        errors.push({ rowNumber: rowNum, itemCode: code, field: 'name', message: 'Item name is required' });
+        hasRowError = true;
+      }
+
+      if (!category) {
+        errors.push({ rowNumber: rowNum, itemCode: code, field: 'category', message: 'Category is required' });
+        hasRowError = true;
+      } else if (!validCategories.includes(category)) {
+        errors.push({
+          rowNumber: rowNum,
+          itemCode: code,
+          field: 'category',
+          message: `Invalid category '${category}'. Valid options: ${validCategories.join(', ')}`
+        });
+        hasRowError = true;
+      }
+
+      if (!unit) {
+        errors.push({ rowNumber: rowNum, itemCode: code, field: 'unit', message: 'Unit is required' });
+        hasRowError = true;
+      }
+
+      if (isNaN(minStock) || minStock < 0) {
+        errors.push({ rowNumber: rowNum, itemCode: code, field: 'min_stock', message: 'Min stock must be a non-negative number' });
+        hasRowError = true;
+      }
+
+      if (isNaN(costPerUnit) || costPerUnit < 0) {
+        errors.push({ rowNumber: rowNum, itemCode: code, field: 'cost_per_unit', message: 'Cost per unit must be a non-negative number' });
+        hasRowError = true;
+      }
+
+      if (!hasRowError) {
+        seenCodes.add(code);
+        validRows.push({
+          code,
+          name,
+          category,
+          unit,
+          minStock: isNaN(minStock) ? 10 : minStock,
+          costPerUnit: isNaN(costPerUnit) ? 0 : costPerUnit,
+          description: description || null
+        });
+      }
+    });
+
+    return res.json({
+      totalRows: rows.length,
+      validCount: validRows.length,
+      errorCount: errors.length,
+      errors,
+      preview: validRows.slice(0, 50)
+    });
+  } catch (err) {
+    console.error('validateCsvImport error:', err);
+    return res.status(500).json({ error: 'Failed to validate CSV data' });
+  }
+}
+
+export function confirmCsvImport(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    const { items } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'No items supplied for import' });
+    }
+
+    const insertItem = db.prepare(`
+      INSERT INTO inventory_items (id, code, name, category, unit, min_stock, cost_per_unit, description)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    // Perform inside a single atomic database transaction
+    const importTransaction = db.transaction((rowsToInsert: any[]) => {
+      for (const item of rowsToInsert) {
+        const id = crypto.randomUUID();
+        insertItem.run(
+          id,
+          item.code.trim().toUpperCase(),
+          item.name.trim(),
+          item.category,
+          item.unit,
+          item.minStock || 10,
+          item.costPerUnit || 0,
+          item.description || null
+        );
+      }
+    });
+
+    importTransaction(items);
+
+    logAudit({
+      userId: req.user.id,
+      action: 'INVENTORY_CSV_IMPORTED',
+      entity: 'INVENTORY',
+      details: { importedCount: items.length },
+      ipAddress: req.ip || '127.0.0.1'
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: `Successfully imported ${items.length} inventory items into catalog.`,
+      importedCount: items.length
+    });
+  } catch (err: any) {
+    console.error('confirmCsvImport error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to complete CSV import transaction' });
+  }
+}
+
+export function exportInventoryCsv(req: AuthenticatedRequest, res: Response) {
+  try {
+    const items = db.prepare(`
+      SELECT i.code, i.name, i.category, i.unit, i.min_stock, i.cost_per_unit,
+             COALESCE(SUM(b.quantity), 0) as current_stock,
+             s.name as supplier_name,
+             w.name as ward_name,
+             MIN(CASE WHEN b.quantity > 0 THEN b.expiry_date ELSE NULL END) as earliest_expiry
+      FROM inventory_items i
+      LEFT JOIN suppliers s ON i.supplier_id = s.id
+      LEFT JOIN wards w ON i.ward_id = w.id
+      LEFT JOIN inventory_batches b ON i.id = b.item_id AND b.quantity > 0
+      GROUP BY i.id
+      ORDER BY i.category ASC, i.name ASC
+    `).all() as any[];
+
+    const headers = ['Item Code', 'Item Name', 'Category', 'Unit', 'Current Stock', 'Min Stock Level', 'Cost Per Unit (INR)', 'Supplier', 'Ward / Dept', 'Earliest Expiry'];
+    const rows = items.map((i) => [
+      i.code,
+      `"${(i.name || '').replace(/"/g, '""')}"`,
+      i.category,
+      i.unit,
+      i.current_stock,
+      i.min_stock,
+      (i.cost_per_unit || 0).toFixed(2),
+      `"${(i.supplier_name || '').replace(/"/g, '""')}"`,
+      `"${(i.ward_name || 'Central Pharmacy').replace(/"/g, '""')}"`,
+      i.earliest_expiry || 'N/A'
+    ].join(','));
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="nurseflow_inventory_export_${new Date().toISOString().split('T')[0]}.csv"`);
+    return res.send(csvContent);
+  } catch (err) {
+    console.error('exportInventoryCsv error:', err);
+    return res.status(500).json({ error: 'Failed to export inventory CSV' });
+  }
+}

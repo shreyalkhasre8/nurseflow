@@ -7,6 +7,7 @@
     "start": "tsx server/index.ts",
     "server": "tsx server/index.ts",
     "seed": "tsx server/seed.ts",
+    "test": "tsx --test tests/**/*.test.ts",
     "client": "npm --prefix client run dev",
     "build:client": "npm --prefix client run build",
     "build": "npm --prefix client install && npm --prefix client run build",

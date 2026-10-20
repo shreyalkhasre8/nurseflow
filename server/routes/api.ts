@@ -11,6 +11,7 @@ import * as notificationController from '../controllers/notificationController.j
 import * as reportController from '../controllers/reportController.js';
 import * as adminController from '../controllers/adminController.js';
 import * as searchController from '../controllers/searchController.js';
+import * as patientController from '../controllers/patientController.js';
 
 export const apiRouter = Router();
 
@@ -42,6 +43,10 @@ apiRouter.put('/registers/entries/:id/correct', authenticate, registerController
 
 // === Inventory ===
 apiRouter.get('/inventory/metrics', authenticate, inventoryController.getInventoryMetrics);
+apiRouter.get('/inventory/template/csv', authenticate, inventoryController.downloadCsvTemplate);
+apiRouter.get('/inventory/export/csv', authenticate, inventoryController.exportInventoryCsv);
+apiRouter.post('/inventory/import/validate', authenticate, requireRole(['Inventory Manager', 'Administrator']), inventoryController.validateCsvImport);
+apiRouter.post('/inventory/import/confirm', authenticate, requireRole(['Inventory Manager', 'Administrator']), inventoryController.confirmCsvImport);
 apiRouter.get('/inventory/items', authenticate, inventoryController.getInventoryItems);
 apiRouter.get('/inventory/items/:id', authenticate, inventoryController.getItemById);
 apiRouter.post('/inventory/items', authenticate, requireRole(['Inventory Manager', 'Administrator']), inventoryController.addItem);
@@ -84,6 +89,15 @@ apiRouter.get('/reports/task-summary', authenticate, reportController.getTaskSum
 apiRouter.get('/reports/workload', authenticate, reportController.getWorkloadReport);
 apiRouter.get('/reports/inventory-consumption', authenticate, reportController.getInventoryConsumptionReport);
 apiRouter.get('/reports/handover-compliance', authenticate, reportController.getHandoverComplianceReport);
+apiRouter.get('/reports/overdue-tasks', authenticate, reportController.getOverdueTasksReport);
+apiRouter.get('/reports/inventory-alerts', authenticate, reportController.getInventoryAlertsReport);
+apiRouter.get('/reports/stock-movement', authenticate, reportController.getStockMovementReport);
+
+// === Patients (Synthetic Inpatient Census) ===
+apiRouter.get('/patients', authenticate, patientController.getPatients);
+apiRouter.get('/patients/:id', authenticate, patientController.getPatientById);
+apiRouter.post('/patients', authenticate, requireRole(['Head Nurse / Supervisor', 'Administrator']), patientController.createPatient);
+apiRouter.put('/patients/:id', authenticate, patientController.updatePatient);
 
 // === Administration & System Metadata ===
 apiRouter.get('/admin/users', authenticate, adminController.getUsers);

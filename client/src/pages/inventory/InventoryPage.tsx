@@ -27,6 +27,9 @@ import {
   Boxes,
   Truck,
   Send,
+  Download,
+  Upload,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 export const InventoryPage: React.FC = () => {
@@ -55,6 +58,19 @@ export const InventoryPage: React.FC = () => {
   const [isCreateRequestModalOpen, setIsCreateRequestModalOpen] = useState(false);
   const [isReviewRequestModalOpen, setIsReviewRequestModalOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<StockRequest | null>(null);
+
+  // CSV Import & Export States
+  const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvValidation, setCsvValidation] = useState<{
+    totalRows: number;
+    validCount: number;
+    errorCount: number;
+    errors: any[];
+    preview: any[];
+  } | null>(null);
+  const [isValidatingCsv, setIsValidatingCsv] = useState(false);
+  const [isImportingCsv, setIsImportingCsv] = useState(false);
 
   // Form states for stock transactions
   const [receiveForm, setReceiveForm] = useState({
@@ -198,6 +214,110 @@ export const InventoryPage: React.FC = () => {
     }
   };
 
+  const handleDownloadCsvTemplate = async () => {
+    try {
+      const token = localStorage.getItem('nurseflow_token');
+      const res = await fetch('/api/inventory/template/csv', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'nurseflow_inventory_template.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      success('CSV template downloaded.');
+    } catch (err) {
+      error('Failed to download template');
+    }
+  };
+
+  const handleExportInventoryCsv = async () => {
+    try {
+      const token = localStorage.getItem('nurseflow_token');
+      const res = await fetch('/api/inventory/export/csv', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `nurseflow_inventory_export_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      success('Inventory catalog exported to CSV successfully.');
+    } catch (err) {
+      error('Failed to export inventory CSV');
+    }
+  };
+
+  const handleCsvFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCsvFile(file);
+    setCsvValidation(null);
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target?.result as string;
+      if (!text) return;
+
+      const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+      if (lines.length < 2) {
+        warning('CSV file appears empty or missing data rows');
+        return;
+      }
+
+      const headers = lines[0].split(',').map((h) => h.trim().replace(/^"|"$/g, ''));
+      const parsedRows = [];
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
+        const obj: Record<string, any> = {};
+        headers.forEach((h, idx) => {
+          obj[h] = cols[idx] !== undefined ? cols[idx] : '';
+        });
+        parsedRows.push(obj);
+      }
+
+      setIsValidatingCsv(true);
+      try {
+        const res = await api.validateInventoryCsv(parsedRows);
+        setCsvValidation(res);
+        if (res.errorCount === 0) {
+          success(`Validated ${res.validCount} rows successfully.`);
+        } else {
+          warning(`Found ${res.errorCount} validation issues in CSV.`);
+        }
+      } catch (err: any) {
+        error(err.message || 'Validation failed');
+      } finally {
+        setIsValidatingCsv(false);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleConfirmCsvImport = async () => {
+    if (!csvValidation || csvValidation.preview.length === 0) return;
+    setIsImportingCsv(true);
+    try {
+      const res = await api.confirmInventoryCsv(csvValidation.preview);
+      success(res.message);
+      setIsCsvModalOpen(false);
+      setCsvFile(null);
+      setCsvValidation(null);
+      loadData();
+    } catch (err: any) {
+      error(err.message || 'Import failed');
+    } finally {
+      setIsImportingCsv(false);
+    }
+  };
+
   return (
     <div className="space-y-5 max-w-7xl mx-auto">
       <PageHeader
@@ -206,6 +326,30 @@ export const InventoryPage: React.FC = () => {
         breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Inventory' }]}
         actions={
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<Download className="w-3.5 h-3.5" />}
+              onClick={handleExportInventoryCsv}
+            >
+              Export CSV
+            </Button>
+
+            {(isInventoryManager || isAdmin) && (
+              <Button
+                variant="outline"
+                size="sm"
+                icon={<Upload className="w-3.5 h-3.5 text-slate-700" />}
+                onClick={() => {
+                  setCsvFile(null);
+                  setCsvValidation(null);
+                  setIsCsvModalOpen(true);
+                }}
+              >
+                Import CSV
+              </Button>
+            )}
+
             <Button
               variant="outline"
               size="sm"
@@ -1055,6 +1199,141 @@ export const InventoryPage: React.FC = () => {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* CSV Batch Catalog Import Modal */}
+      <Modal
+        isOpen={isCsvModalOpen}
+        onClose={() => setIsCsvModalOpen(false)}
+        title="Import Inventory Catalog via CSV"
+        subtitle="Bulk ingest pharmaceutical and surgical items with automated validation"
+        maxWidth="2xl"
+      >
+        <div className="space-y-4 text-xs">
+          <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-clinical">
+            <div>
+              <p className="font-semibold text-slate-800">Standardized CSV Template</p>
+              <p className="text-slate-500 text-[11px]">Columns: code, name, category, unit, min_stock, cost_per_unit, description</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<Download className="w-3.5 h-3.5" />}
+              onClick={handleDownloadCsvTemplate}
+            >
+              Download Template
+            </Button>
+          </div>
+
+          <div className="border-2 border-dashed border-slate-300 rounded-clinical p-5 text-center hover:bg-slate-50 transition-colors">
+            <input
+              type="file"
+              accept=".csv"
+              id="csv-file-input"
+              className="hidden"
+              onChange={handleCsvFileSelected}
+            />
+            <label htmlFor="csv-file-input" className="cursor-pointer flex flex-col items-center">
+              <FileSpreadsheet className="w-8 h-8 text-teal-600 mb-2" />
+              <span className="font-semibold text-slate-800">
+                {csvFile ? csvFile.name : 'Click to select CSV file from your computer'}
+              </span>
+              <span className="text-[11px] text-slate-500 mt-0.5">Supports UTF-8 CSV datasets</span>
+            </label>
+          </div>
+
+          {isValidatingCsv && (
+            <div className="p-3 text-center text-teal-700 bg-teal-50 border border-teal-200 rounded-clinical animate-pulse">
+              Validating CSV rows against inventory schema...
+            </div>
+          )}
+
+          {csvValidation && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="p-2.5 bg-slate-100 rounded-clinical text-center border border-slate-200">
+                  <div className="text-[10px] text-slate-500 uppercase font-semibold">Total Rows</div>
+                  <div className="text-base font-bold text-slate-800">{csvValidation.totalRows}</div>
+                </div>
+                <div className="p-2.5 bg-emerald-50 rounded-clinical text-center border border-emerald-200">
+                  <div className="text-[10px] text-emerald-700 uppercase font-semibold">Valid Rows</div>
+                  <div className="text-base font-bold text-emerald-700">{csvValidation.validCount}</div>
+                </div>
+                <div className="p-2.5 bg-rose-50 rounded-clinical text-center border border-rose-200">
+                  <div className="text-[10px] text-rose-700 uppercase font-semibold">Errors Found</div>
+                  <div className="text-base font-bold text-rose-700">{csvValidation.errorCount}</div>
+                </div>
+              </div>
+
+              {csvValidation.errorCount > 0 && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-clinical max-h-36 overflow-y-auto space-y-1">
+                  <p className="font-bold text-rose-800 text-[11px]">Validation Issues Detected:</p>
+                  {csvValidation.errors.map((err, i) => (
+                    <div key={i} className="text-rose-700 text-[11px] flex items-start gap-1.5">
+                      <span className="font-bold">Row {err.rowNumber} [{err.itemCode}]:</span>
+                      <span>{err.message}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {csvValidation.validCount > 0 && (
+                <div>
+                  <p className="font-semibold text-slate-700 mb-1">Preview Valid Records ({csvValidation.preview.length} shown):</p>
+                  <div className="border border-slate-200 rounded-clinical overflow-x-auto max-h-40">
+                    <table className="w-full text-left text-[11px]">
+                      <thead className="bg-slate-100 text-slate-600 font-semibold sticky top-0">
+                        <tr>
+                          <th className="p-2">Code</th>
+                          <th className="p-2">Name</th>
+                          <th className="p-2">Category</th>
+                          <th className="p-2">Unit</th>
+                          <th className="p-2">Min Stock</th>
+                          <th className="p-2">Cost (INR)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {csvValidation.preview.map((row, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50">
+                            <td className="p-2 font-mono font-bold text-teal-800">{row.code}</td>
+                            <td className="p-2 text-slate-800">{row.name}</td>
+                            <td className="p-2 text-slate-600">{row.category}</td>
+                            <td className="p-2 text-slate-600">{row.unit}</td>
+                            <td className="p-2 text-slate-600">{row.minStock}</td>
+                            <td className="p-2 text-slate-600">₹{row.costPerUnit}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              onClick={() => {
+                setIsCsvModalOpen(false);
+                setCsvFile(null);
+                setCsvValidation(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={!csvValidation || csvValidation.validCount === 0 || isImportingCsv}
+              onClick={handleConfirmCsvImport}
+            >
+              {isImportingCsv ? 'Importing Dataset...' : `Confirm Import (${csvValidation?.validCount || 0} Items)`}
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

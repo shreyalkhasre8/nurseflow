@@ -1,6 +1,7 @@
 import React from 'react';
 
-export const LoadingSkeleton: React.FC<{ rows?: number }> = ({ rows = 5 }) => {
+export const LoadingSkeleton: React.FC<{ rows?: number; type?: string; count?: number }> = ({ rows = 5, count }) => {
+  const effectiveRows = count || rows;
   return (
     <div className="w-full space-y-3 p-4 bg-white rounded-clinical border border-slate-200">
       <div className="h-6 bg-slate-200 rounded w-1/4 animate-pulse"></div>

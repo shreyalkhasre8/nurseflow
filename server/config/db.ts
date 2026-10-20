@@ -106,6 +106,22 @@ export function initDatabase() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- Patients (Synthetic Inpatient Census for Workflows)
+    CREATE TABLE IF NOT EXISTS patients (
+      id TEXT PRIMARY KEY,
+      uhid TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      age INTEGER NOT NULL,
+      gender TEXT NOT NULL, -- Male, Female, Other
+      ward_id TEXT NOT NULL REFERENCES wards(id),
+      bed_number TEXT NOT NULL,
+      admission_date TEXT NOT NULL,
+      diagnosis TEXT,
+      attending_doctor TEXT,
+      status TEXT DEFAULT 'ADMITTED', -- ADMITTED, DISCHARGED, TRANSFERRED
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     -- Task Categories
     CREATE TABLE IF NOT EXISTS task_categories (
       id TEXT PRIMARY KEY,
@@ -372,6 +388,8 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_handovers_date_ward ON handovers(date, ward_id);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(user_id);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at);
+    CREATE INDEX IF NOT EXISTS idx_patients_ward ON patients(ward_id);
+    CREATE INDEX IF NOT EXISTS idx_patients_uhid ON patients(uhid);
   `);
   console.log('Database initialized successfully with complete relational schema.');
 }

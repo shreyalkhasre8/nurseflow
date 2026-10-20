@@ -2,11 +2,11 @@ import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { NurseDashboard } from './NurseDashboard';
 import { SupervisorDashboard } from './SupervisorDashboard';
-import { AdminPage } from '../admin/AdminPage';
-import { InventoryPage } from '../inventory/InventoryPage';
+import { InventoryManagerDashboard } from './InventoryManagerDashboard';
+import { AdminDashboard } from './AdminDashboard';
 
 export const DashboardPage: React.FC = () => {
-  const { user, isNurse, isSupervisor, isInventoryManager, isAdmin } = useAuth();
+  const { isNurse, isSupervisor, isInventoryManager, isAdmin } = useAuth();
 
   if (isNurse) {
     return <NurseDashboard />;
@@ -17,11 +17,11 @@ export const DashboardPage: React.FC = () => {
   }
 
   if (isInventoryManager) {
-    return <InventoryPage />;
+    return <InventoryManagerDashboard />;
   }
 
   if (isAdmin) {
-    return <SupervisorDashboard />;
+    return <AdminDashboard />;
   }
 
   return <NurseDashboard />;

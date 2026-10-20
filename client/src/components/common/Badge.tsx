@@ -13,10 +13,12 @@ export type BadgeVariant =
   | 'danger'
   | 'success'
   | 'neutral'
+  | 'teal'
   | 'info';
 
 interface BadgeProps {
   variant?: BadgeVariant;
+  size?: 'sm' | 'md' | 'lg';
   children: React.ReactNode;
   className?: string;
   dot?: boolean;
@@ -24,6 +26,7 @@ interface BadgeProps {
 
 export const Badge: React.FC<BadgeProps> = ({
   variant = 'neutral',
+  size = 'md',
   children,
   className = '',
   dot = false,
@@ -38,6 +41,7 @@ export const Badge: React.FC<BadgeProps> = ({
         return { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dotColor: 'bg-amber-500' };
       case 'medium':
       case 'in_progress':
+      case 'teal':
         return { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200', dotColor: 'bg-teal-600' };
       case 'low':
       case 'neutral':
@@ -56,10 +60,11 @@ export const Badge: React.FC<BadgeProps> = ({
   };
 
   const { bg, text, border, dotColor } = getVariantStyles();
+  const sizeClasses = size === 'sm' ? 'px-2 py-0.5 text-[10px]' : size === 'lg' ? 'px-3 py-1 text-sm' : 'px-2.5 py-0.5 text-xs';
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-medium border ${bg} ${text} ${border} ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-md font-medium border ${sizeClasses} ${bg} ${text} ${border} ${className}`}
     >
       {dot && <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />}
       {children}

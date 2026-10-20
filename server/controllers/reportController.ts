@@ -146,3 +146,126 @@ export function getHandoverComplianceReport(req: AuthenticatedRequest, res: Resp
     return res.status(500).json({ error: 'Failed to generate handover compliance report' });
   }
 }
+
+export function getOverdueTasksReport(req: AuthenticatedRequest, res: Response) {
+  try {
+    const { wardId } = req.query;
+    let query = `
+      SELECT t.id, t.title, t.priority, t.status, t.due_date, t.patient_reference,
+             u.name as assigned_to_name, u.employee_id as assigned_to_emp_id,
+             w.name as ward_name, tc.name as category_name, tc.color as category_color,
+             ROUND((julianday('now') - julianday(t.due_date)) * 24, 1) as hours_overdue
+      FROM tasks t
+      JOIN users u ON t.assigned_to = u.id
+      JOIN wards w ON t.ward_id = w.id
+      JOIN task_categories tc ON t.category_id = tc.id
+      WHERE t.status NOT IN ('Completed', 'Cancelled')
+        AND datetime(t.due_date) < datetime('now')
+    `;
+    const params: any[] = [];
+
+    if (wardId && wardId !== 'ALL') {
+      query += ` AND t.ward_id = ?`;
+      params.push(wardId);
+    }
+
+    query += ` ORDER BY t.due_date ASC`;
+
+    const overdueTasks = db.prepare(query).all(...params);
+    return res.json(overdueTasks);
+  } catch (err) {
+    console.error('getOverdueTasksReport error:', err);
+    return res.status(500).json({ error: 'Failed to generate overdue tasks report' });
+  }
+}
+
+export function getInventoryAlertsReport(req: AuthenticatedRequest, res: Response) {
+  try {
+    const lowStockItems = db.prepare(`
+      SELECT i.id, i.code, i.name, i.category, i.unit, i.min_stock,
+             COALESCE(SUM(b.quantity), 0) as current_stock,
+             s.name as supplier_name, w.name as ward_name
+      FROM inventory_items i
+      LEFT JOIN inventory_batches b ON i.id = b.item_id AND b.quantity > 0 AND b.expiry_date >= date('now')
+      LEFT JOIN suppliers s ON i.supplier_id = s.id
+      LEFT JOIN wards w ON i.ward_id = w.id
+      GROUP BY i.id
+      HAVING current_stock <= i.min_stock
+      ORDER BY (i.min_stock - current_stock) DESC
+    `).all();
+
+    const nearExpiryBatches = db.prepare(`
+      SELECT b.id, b.batch_number, b.quantity, b.expiry_date, b.location_bin,
+             i.name as item_name, i.code as item_code, i.category, i.unit,
+             ROUND(julianday(b.expiry_date) - julianday('now')) as days_to_expiry
+      FROM inventory_batches b
+      JOIN inventory_items i ON b.item_id = i.id
+      WHERE b.quantity > 0
+        AND b.expiry_date >= date('now')
+        AND b.expiry_date <= date('now', '+60 days')
+      ORDER BY b.expiry_date ASC
+    `).all();
+
+    const expiredBatches = db.prepare(`
+      SELECT b.id, b.batch_number, b.quantity, b.expiry_date, b.location_bin,
+             i.name as item_name, i.code as item_code, i.category, i.unit,
+             ROUND(julianday('now') - julianday(b.expiry_date)) as days_expired
+      FROM inventory_batches b
+      JOIN inventory_items i ON b.item_id = i.id
+      WHERE b.quantity > 0
+        AND b.expiry_date < date('now')
+      ORDER BY b.expiry_date ASC
+    `).all();
+
+    return res.json({
+      lowStockItems,
+      nearExpiryBatches,
+      expiredBatches
+    });
+  } catch (err) {
+    console.error('getInventoryAlertsReport error:', err);
+    return res.status(500).json({ error: 'Failed to generate inventory alerts report' });
+  }
+}
+
+export function getStockMovementReport(req: AuthenticatedRequest, res: Response) {
+  try {
+    const { startDate, endDate, wardId } = req.query;
+
+    let query = `
+      SELECT t.type, COUNT(t.id) as transaction_count, SUM(t.quantity) as total_quantity
+      FROM inventory_transactions t
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+
+    if (wardId && wardId !== 'ALL') {
+      query += ` AND t.ward_id = ?`;
+      params.push(wardId);
+    }
+
+    query += ` GROUP BY t.type`;
+
+    const summaryByType = db.prepare(query).all(...params);
+
+    const recentMovements = db.prepare(`
+      SELECT t.*, i.name as item_name, i.code as item_code, i.unit,
+             u.name as staff_name, w.name as ward_name, b.batch_number
+      FROM inventory_transactions t
+      JOIN inventory_items i ON t.item_id = i.id
+      JOIN users u ON t.user_id = u.id
+      LEFT JOIN wards w ON t.ward_id = w.id
+      LEFT JOIN inventory_batches b ON t.batch_id = b.id
+      ORDER BY t.created_at DESC
+      LIMIT 100
+    `).all();
+
+    return res.json({
+      summaryByType,
+      recentMovements
+    });
+  } catch (err) {
+    console.error('getStockMovementReport error:', err);
+    return res.status(500).json({ error: 'Failed to generate stock movement report' });
+  }
+}

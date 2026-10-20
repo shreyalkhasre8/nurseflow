@@ -25,13 +25,16 @@ export const ReportsPage: React.FC = () => {
   const { user } = useAuth();
   const { success, error } = useToast();
 
-  const [activeReport, setActiveReport] = useState<'tasks' | 'workload' | 'consumption' | 'handover'>('tasks');
+  const [activeReport, setActiveReport] = useState<'tasks' | 'overdue' | 'workload' | 'consumption' | 'alerts' | 'handover' | 'movement'>('tasks');
   const [wards, setWards] = useState<Ward[]>([]);
   const [wardFilter, setWardFilter] = useState('ALL');
   const [taskSummary, setTaskSummary] = useState<any>(null);
+  const [overdueTasks, setOverdueTasks] = useState<any[]>([]);
   const [workloadReport, setWorkloadReport] = useState<any[]>([]);
   const [consumptionReport, setConsumptionReport] = useState<any[]>([]);
+  const [inventoryAlerts, setInventoryAlerts] = useState<any>(null);
   const [handoverReport, setHandoverReport] = useState<any[]>([]);
+  const [movementReport, setMovementReport] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const loadReportData = async () => {
@@ -43,15 +46,24 @@ export const ReportsPage: React.FC = () => {
       if (activeReport === 'tasks') {
         const data = await api.getTaskSummaryReport({ wardId: wardFilter });
         setTaskSummary(data);
+      } else if (activeReport === 'overdue') {
+        const data = await api.getOverdueTasksReport({ wardId: wardFilter });
+        setOverdueTasks(data);
       } else if (activeReport === 'workload') {
         const data = await api.getWorkloadReport({ wardId: wardFilter });
         setWorkloadReport(data);
       } else if (activeReport === 'consumption') {
         const data = await api.getInventoryConsumptionReport({ wardId: wardFilter });
         setConsumptionReport(data);
+      } else if (activeReport === 'alerts') {
+        const data = await api.getInventoryAlertsReport();
+        setInventoryAlerts(data);
       } else if (activeReport === 'handover') {
         const data = await api.getHandoverComplianceReport();
         setHandoverReport(data);
+      } else if (activeReport === 'movement') {
+        const data = await api.getStockMovementReport({ wardId: wardFilter });
+        setMovementReport(data);
       }
     } catch (err: any) {
       error('Failed to generate report');
@@ -96,6 +108,44 @@ export const ReportsPage: React.FC = () => {
           c.returned_qty,
           c.adjusted_qty,
           c.current_stock,
+        ].join(',')
+      );
+    } else if (activeReport === 'overdue') {
+      headers = ['Task Title', 'Category', 'Ward', 'Assigned Nurse', 'Employee ID', 'Priority', 'Due Date', 'Hours Overdue', 'Patient UHID'];
+      rows = overdueTasks.map((t) =>
+        [
+          `"${(t.title || '').replace(/"/g, '""')}"`,
+          `"${t.category_name || ''}"`,
+          `"${t.ward_name || ''}"`,
+          `"${t.assigned_to_name || ''}"`,
+          t.assigned_to_emp_id || '',
+          t.priority,
+          t.due_date,
+          t.hours_overdue,
+          `"${t.patient_reference || ''}"`,
+        ].join(',')
+      );
+    } else if (activeReport === 'alerts') {
+      headers = ['Alert Type', 'Item Code', 'Item Name', 'Category', 'Current Stock', 'Min Stock', 'Expiry Date / Batch'];
+      const lowRows = (inventoryAlerts?.lowStockItems || []).map((i: any) =>
+        ['LOW_STOCK', i.code, `"${i.name}"`, i.category, i.current_stock, i.min_stock, 'N/A'].join(',')
+      );
+      const nearRows = (inventoryAlerts?.nearExpiryBatches || []).map((b: any) =>
+        ['NEAR_EXPIRY', b.item_code, `"${b.item_name}"`, b.category, b.quantity, 'N/A', `${b.expiry_date} (Batch ${b.batch_number})`].join(',')
+      );
+      rows = [...lowRows, ...nearRows];
+    } else if (activeReport === 'movement') {
+      headers = ['Transaction ID', 'Date & Time', 'Item Name', 'Movement Type', 'Quantity', 'Unit', 'Ward / Destination', 'Performed By'];
+      rows = (movementReport?.recentMovements || []).map((m: any) =>
+        [
+          m.id.slice(0, 8),
+          m.created_at,
+          `"${m.item_name}"`,
+          m.type,
+          m.quantity,
+          m.unit,
+          `"${m.ward_name || m.destination || ''}"`,
+          `"${m.staff_name || ''}"`,
         ].join(',')
       );
     } else if (activeReport === 'handover') {
@@ -158,46 +208,70 @@ export const ReportsPage: React.FC = () => {
       />
 
       {/* Report Selector Tabs */}
-      <div className="flex border-b border-slate-200 no-print">
+      <div className="flex border-b border-slate-200 no-print overflow-x-auto">
         <button
           onClick={() => setActiveReport('tasks')}
-          className={`pb-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors ${
+          className={`pb-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 shrink-0 transition-colors ${
             activeReport === 'tasks'
               ? 'border-teal-700 text-teal-800'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
           <BarChart3 className="w-4 h-4" />
-          Task Performance & Delays
+          Task Performance
+        </button>
+
+        <button
+          onClick={() => setActiveReport('overdue')}
+          className={`pb-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 shrink-0 transition-colors ${
+            activeReport === 'overdue'
+              ? 'border-teal-700 text-teal-800'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <AlertCircle className="w-4 h-4 text-rose-600" />
+          Overdue Care Tasks
         </button>
 
         <button
           onClick={() => setActiveReport('workload')}
-          className={`pb-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors ${
+          className={`pb-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 shrink-0 transition-colors ${
             activeReport === 'workload'
               ? 'border-teal-700 text-teal-800'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
           <Users className="w-4 h-4" />
-          Shift-wise Nurse Workload
+          Shift Nurse Workload
         </button>
 
         <button
           onClick={() => setActiveReport('consumption')}
-          className={`pb-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors ${
+          className={`pb-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 shrink-0 transition-colors ${
             activeReport === 'consumption'
               ? 'border-teal-700 text-teal-800'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
           <Package className="w-4 h-4" />
-          Ward Stock Consumption
+          Stock Consumption
+        </button>
+
+        <button
+          onClick={() => setActiveReport('alerts')}
+          className={`pb-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 shrink-0 transition-colors ${
+            activeReport === 'alerts'
+              ? 'border-teal-700 text-teal-800'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <AlertCircle className="w-4 h-4 text-amber-500" />
+          Low Stock & Expiry Safety
         </button>
 
         <button
           onClick={() => setActiveReport('handover')}
-          className={`pb-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors ${
+          className={`pb-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 shrink-0 transition-colors ${
             activeReport === 'handover'
               ? 'border-teal-700 text-teal-800'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -205,6 +279,18 @@ export const ReportsPage: React.FC = () => {
         >
           <ArrowRightLeft className="w-4 h-4" />
           Handover Compliance
+        </button>
+
+        <button
+          onClick={() => setActiveReport('movement')}
+          className={`pb-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 shrink-0 transition-colors ${
+            activeReport === 'movement'
+              ? 'border-teal-700 text-teal-800'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Building2 className="w-4 h-4" />
+          Stock Movement Ledger
         </button>
       </div>
 
@@ -396,6 +482,191 @@ export const ReportsPage: React.FC = () => {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* 5. Overdue Care Tasks Report */}
+          {activeReport === 'overdue' && (
+            <div className="bg-white rounded-clinical border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-4 bg-rose-50 border-b border-rose-200 flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-rose-900 text-xs">Clinical Delay Tracking</h3>
+                  <p className="text-[11px] text-rose-700">Identifies patient care tasks currently exceeding target turnaround times</p>
+                </div>
+                <Badge variant="danger" size="md">
+                  {overdueTasks.length} Overdue Care Tasks
+                </Badge>
+              </div>
+
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-100 text-slate-600 font-semibold uppercase text-[10px]">
+                  <tr>
+                    <th className="py-2.5 px-4">Task Details</th>
+                    <th className="py-2.5 px-3">Ward</th>
+                    <th className="py-2.5 px-3">Patient Reference</th>
+                    <th className="py-2.5 px-3">Assigned Nurse</th>
+                    <th className="py-2.5 px-3">Priority</th>
+                    <th className="py-2.5 px-3 text-right">Delay</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {overdueTasks.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-slate-400">
+                        Zero overdue tasks recorded for selected ward filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    overdueTasks.map((t) => (
+                      <tr key={t.id} className="hover:bg-slate-50">
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-slate-900">{t.title}</div>
+                          <div className="text-[11px] text-slate-500">{t.category_name}</div>
+                        </td>
+                        <td className="py-3 px-3 text-slate-700">{t.ward_name}</td>
+                        <td className="py-3 px-3 text-slate-700 font-mono text-[11px]">{t.patient_reference}</td>
+                        <td className="py-3 px-3 text-slate-800 font-medium">
+                          Sister {t.assigned_to_name}
+                          <span className="text-[10px] text-slate-400 block font-mono">{t.assigned_to_emp_id}</span>
+                        </td>
+                        <td className="py-3 px-3">
+                          <Badge variant={t.priority === 'Urgent' ? 'danger' : 'warning'} size="sm">
+                            {t.priority}
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-3 text-right font-bold text-rose-700">
+                          {t.hours_overdue} hrs late
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* 6. Low Stock & Expiry Safety Report */}
+          {activeReport === 'alerts' && inventoryAlerts && (
+            <div className="space-y-6">
+              {/* Low stock section */}
+              <div className="bg-white rounded-clinical border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-3 bg-amber-50 border-b border-amber-200 flex items-center justify-between">
+                  <span className="font-bold text-amber-900 text-xs">SKUs Below Reorder Threshold ({inventoryAlerts.lowStockItems.length})</span>
+                  <Badge variant="warning" size="sm">Action Required</Badge>
+                </div>
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100 text-slate-600 font-semibold uppercase text-[10px]">
+                    <tr>
+                      <th className="py-2 px-4">Code</th>
+                      <th className="py-2 px-3">Item Name</th>
+                      <th className="py-2 px-3">Category</th>
+                      <th className="py-2 px-3 text-right">Available Stock</th>
+                      <th className="py-2 px-3 text-right">Min Threshold</th>
+                      <th className="py-2 px-4">Supplier</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {inventoryAlerts.lowStockItems.map((i: any) => (
+                      <tr key={i.id} className="hover:bg-slate-50">
+                        <td className="py-2.5 px-4 font-mono font-bold text-teal-800">{i.code}</td>
+                        <td className="py-2.5 px-3 font-semibold text-slate-900">{i.name}</td>
+                        <td className="py-2.5 px-3 text-slate-600">{i.category}</td>
+                        <td className="py-2.5 px-3 text-right font-bold text-rose-700">{i.current_stock} {i.unit}</td>
+                        <td className="py-2.5 px-3 text-right font-mono text-slate-500">{i.min_stock} {i.unit}</td>
+                        <td className="py-2.5 px-4 text-slate-600 text-[11px]">{i.supplier_name || 'N/A'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Batches near expiry */}
+              <div className="bg-white rounded-clinical border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-3 bg-rose-50 border-b border-rose-200 flex items-center justify-between">
+                  <span className="font-bold text-rose-900 text-xs">Batches Expiring Within 60 Days ({inventoryAlerts.nearExpiryBatches.length})</span>
+                  <Badge variant="danger" size="sm">FEFO Priority</Badge>
+                </div>
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100 text-slate-600 font-semibold uppercase text-[10px]">
+                    <tr>
+                      <th className="py-2 px-4">Batch No.</th>
+                      <th className="py-2 px-3">Item</th>
+                      <th className="py-2 px-3">Quantity</th>
+                      <th className="py-2 px-3">Location Bin</th>
+                      <th className="py-2 px-3">Expiry Date</th>
+                      <th className="py-2 px-4 text-right">Time Remaining</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {inventoryAlerts.nearExpiryBatches.map((b: any) => (
+                      <tr key={b.id} className="hover:bg-slate-50">
+                        <td className="py-2.5 px-4 font-mono font-bold text-slate-900">{b.batch_number}</td>
+                        <td className="py-2.5 px-3 font-medium text-slate-800">{b.item_name}</td>
+                        <td className="py-2.5 px-3 font-mono font-bold text-slate-700">{b.quantity} {b.unit}</td>
+                        <td className="py-2.5 px-3 text-slate-500 text-[11px]">{b.location_bin}</td>
+                        <td className="py-2.5 px-3 text-slate-600">{b.expiry_date}</td>
+                        <td className="py-2.5 px-4 text-right font-bold text-rose-700">{b.days_to_expiry} days left</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* 7. Stock Movement Ledger Report */}
+          {activeReport === 'movement' && movementReport && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {movementReport.summaryByType.map((st: any) => (
+                  <div key={st.type} className="bg-white p-3.5 rounded-clinical border border-slate-200 shadow-sm text-xs">
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold">{st.type} Transactions</span>
+                    <div className="text-xl font-bold text-slate-900 mt-1">{st.transaction_count} logs</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">{st.total_quantity} units transferred</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-white rounded-clinical border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-3 bg-slate-50 border-b border-slate-200 font-semibold text-xs text-slate-800">
+                  Forensic Stock Movement Log (Recent 100 Transactions)
+                </div>
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100 text-slate-600 font-semibold uppercase text-[10px]">
+                    <tr>
+                      <th className="py-2 px-4">Date & Time</th>
+                      <th className="py-2 px-3">Item</th>
+                      <th className="py-2 px-3">Movement Type</th>
+                      <th className="py-2 px-3 text-right">Quantity</th>
+                      <th className="py-2 px-3">Ward / Route</th>
+                      <th className="py-2 px-4">Staff Member</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {movementReport.recentMovements.map((m: any) => (
+                      <tr key={m.id} className="hover:bg-slate-50">
+                        <td className="py-2.5 px-4 font-mono text-[11px] text-slate-500">
+                          {new Date(m.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span className="font-semibold text-slate-900">{m.item_name}</span>
+                          <span className="text-[10px] text-slate-400 block font-mono">{m.item_code}</span>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <Badge variant={m.type === 'RECEIVED' ? 'success' : m.type === 'ISSUED' ? 'info' : 'warning'} size="sm">
+                            {m.type}
+                          </Badge>
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-800">
+                          {m.type === 'ISSUED' ? '-' : '+'}{m.quantity} {m.unit}
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-700 text-[11px]">{m.ward_name || m.destination || 'Central Store'}</td>
+                        <td className="py-2.5 px-4 text-slate-800">{m.staff_name}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
