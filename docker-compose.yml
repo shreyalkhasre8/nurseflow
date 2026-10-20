@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  nurseflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nurseflow-app
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - JWT_SECRET=change-this-to-a-secure-secret-in-production
+    volumes:
+      - nurseflow-data:/app/data
+
+volumes:
+  nurseflow-data:
+    driver: local

@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: nurseflow
+    runtime: node
+    plan: starter
+    buildCommand: npm run build
+    startCommand: npm start
+    disk:
+      name: nurseflow-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
