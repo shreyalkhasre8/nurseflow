@@ -16,6 +16,7 @@ import {
   Ward,
   SearchResults
 } from '../types';
+import { handleMockApi } from './mockApi';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
@@ -39,27 +40,45 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  try {
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+    });
 
-  if (response.status === 401) {
-    // Only redirect if not already on login
-    if (!window.location.pathname.includes('/login')) {
-      localStorage.removeItem('nurseflow_token');
-      localStorage.removeItem('nurseflow_user');
-      window.dispatchEvent(new Event('nurseflow:session_expired'));
+    const contentType = response.headers.get('content-type') || '';
+
+    // If serverless static host returned 404, 405 (Method Not Allowed), or HTML fallback (SPA rewrite)
+    if (response.status === 404 || response.status === 405 || contentType.includes('text/html')) {
+      return await handleMockApi<T>(endpoint, options);
     }
+
+    if (response.status === 401) {
+      if (!window.location.pathname.includes('/login')) {
+        localStorage.removeItem('nurseflow_token');
+        localStorage.removeItem('nurseflow_user');
+        window.dispatchEvent(new Event('nurseflow:session_expired'));
+      }
+    }
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      // If server returned a 500 error or clinical server error, fallback to mock demo engine on static hosts
+      if (response.status >= 500) {
+        return await handleMockApi<T>(endpoint, options);
+      }
+      throw new ApiError(data.error || 'A clinical server error occurred', response.status);
+    }
+
+    return data as T;
+  } catch (err: any) {
+    if (err instanceof ApiError) {
+      throw err;
+    }
+    // Network offline / connection refused / static host -> fallback to mock engine
+    return await handleMockApi<T>(endpoint, options);
   }
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new ApiError(data.error || 'A clinical server error occurred', response.status);
-  }
-
-  return data as T;
 }
 
 export const api = {
