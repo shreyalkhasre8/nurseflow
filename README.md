@@ -5,9 +5,13 @@
 [![React](https://img.shields.io/badge/React-19.0-61dafb.svg)](https://react.dev/)
 [![Express](https://img.shields.io/badge/Express-5.0-lightgrey.svg)](https://expressjs.com/)
 [![SQLite](https://img.shields.io/badge/Database-better--sqlite3-green.svg)](https://github.com/WiseLibs/better-sqlite3)
+[![Deployment](https://img.shields.io/badge/Vercel-Live%20Demo-brightgreen.svg)](https://nurseflow-gules.vercel.app)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > *"Clinical operations, organized."*
+
+🌐 **Live Vercel Production URL**: [https://nurseflow-gules.vercel.app](https://nurseflow-gules.vercel.app)  
+📦 **GitHub Repository**: [https://github.com/shreyalkhasre8/nurseflow](https://github.com/shreyalkhasre8/nurseflow)
 
 ---
 
