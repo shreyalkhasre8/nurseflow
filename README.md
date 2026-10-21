@@ -1,5 +1,5 @@
 # NurseFlow — Nursing Workflow, Digital Register, Shift Handover & Inventory Management System
-## Final Year Software Engineering Project
+
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-19.0-61dafb.svg)](https://react.dev/)
