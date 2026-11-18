@@ -65,8 +65,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const switchUserByEmail = async (email: string) => {
-    // Quick demo role switcher login using standard credentials
-    await login(email, 'hospital123');
+    // Demo user switcher using standard credentials
+    await login(email, 'NurseFlow@2026');
   };
 
   const logout = async () => {

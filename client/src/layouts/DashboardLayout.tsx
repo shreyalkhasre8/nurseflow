@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
-import { DemoRoleBanner } from '../components/common/DemoRoleBanner';
 import { GlobalSearchModal } from '../components/search/GlobalSearchModal';
 import { NotificationDrawer } from '../components/notifications/NotificationDrawer';
 import {
@@ -150,9 +149,6 @@ export const DashboardLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
-      {/* 1-Click Clinical Role Switcher for seamless previewing & evaluation */}
-      <DemoRoleBanner />
-
       <div className="flex-1 flex overflow-hidden">
         {/* Mobile Backdrop */}
         {sidebarOpen && (

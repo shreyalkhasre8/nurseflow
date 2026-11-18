@@ -89,7 +89,7 @@ export function runSeed() {
 
     // 5. Users & Profiles (65+ healthcare professionals)
     console.log('  Seeding 65+ realistic hospital staff profiles...');
-    const defaultPasswordHash = bcrypt.hashSync('hospital123', 10);
+    const defaultPasswordHash = bcrypt.hashSync('NurseFlow@2026', 10);
     const userStmt = db.prepare(`
       INSERT INTO users (id, employee_id, name, email, password_hash, role_id, department_id, ward_id, phone, status, last_login)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', datetime('now', '-' || (abs(random()) % 48) || ' hours'))
@@ -101,6 +101,12 @@ export function runSeed() {
 
     // Primary demonstration users
     const primaryUsers = [
+      // Preconfigured demonstration accounts (Requirements 2 & 4)
+      { id: 'usr-demo-nurse', empId: 'DEMO-NUR-01', name: 'Sister Sarah Jenkins (Staff Nurse)', email: 'nurse@nurseflow.demo', role: 'role-nurse', dept: 'dept-icu', ward: 'ward-micu', qual: 'B.Sc. Nursing, Critical Care Registered', reg: 'DEMO-RN-001' },
+      { id: 'usr-demo-sup', empId: 'DEMO-HNS-01', name: 'Sister Sunita Rao (Charge Nurse)', email: 'headnurse@nurseflow.demo', role: 'role-supervisor', dept: 'dept-icu', ward: 'ward-micu', qual: 'M.Sc. Nursing, Clinical Nurse Specialist', reg: 'DEMO-HN-001' },
+      { id: 'usr-demo-inv', empId: 'DEMO-INV-01', name: 'Rajesh Kumar (Chief Pharmacist)', email: 'inventory@nurseflow.demo', role: 'role-inventory', dept: 'dept-admin', ward: null, qual: 'M.Pharm, Hospital Supply Chain Lead', reg: 'DEMO-INV-001' },
+      { id: 'usr-demo-admin', empId: 'DEMO-ADM-01', name: 'Dr. Ramesh Hegde (Medical Superintendent)', email: 'admin@nurseflow.demo', role: 'role-admin', dept: 'dept-admin', ward: null, qual: 'MD, MHA, Healthcare Administrator', reg: 'DEMO-ADM-001' },
+
       { id: 'usr-priya', empId: 'NF-NUR-101', name: 'Priya Sharma', email: 'priya.sharma@nurseflow.local', role: 'role-nurse', dept: 'dept-icu', ward: 'ward-micu', qual: 'B.Sc. Nursing, Critical Care Certified', reg: 'KNC-2018-98442' },
       { id: 'usr-mary', empId: 'NF-NUR-102', name: 'Sister Mary Thomas', email: 'mary.thomas@nurseflow.local', role: 'role-nurse', dept: 'dept-surg', ward: 'ward-fsw', qual: 'G.N.M, Post-Basic B.Sc.', reg: 'KNC-2014-55120' },
       { id: 'usr-ananya', empId: 'NF-NUR-103', name: 'Ananya Patel', email: 'ananya.patel@nurseflow.local', role: 'role-nurse', dept: 'dept-emrg', ward: 'ward-etr', qual: 'B.Sc. Nursing, Trauma Life Support (ATLS)', reg: 'GNC-2020-77319' },
@@ -109,11 +115,6 @@ export function runSeed() {
       { id: 'usr-sneha', empId: 'NF-SUP-202', name: 'Sneha Kulkarni', email: 'sneha.kulkarni@nurseflow.local', role: 'role-supervisor', dept: 'dept-surg', ward: 'ward-fsw', qual: 'M.Sc. Surgical Nursing', reg: 'MNC-2012-44102' },
       { id: 'usr-rajesh', empId: 'NF-INV-301', name: 'Rajesh Kumar', email: 'rajesh.kumar@nurseflow.local', role: 'role-inventory', dept: 'dept-admin', ward: null, qual: 'B.Pharm, Certified Hospital Supply Chain', reg: 'PCI-KA-2015-8812' },
       { id: 'usr-admin', empId: 'NF-ADM-401', name: 'Dr. Ramesh Hegde', email: 'admin@nurseflow.local', role: 'role-admin', dept: 'dept-admin', ward: null, qual: 'MHA, MBBS, Medical Superintendent', reg: 'KMC-2004-66321' },
-      // Generic demo login shortcuts (Requirement 69)
-      { id: 'usr-demo-nurse', empId: 'NF-DEMO-NUR', name: 'Staff Nurse Demo', email: 'nurse@nurseflow.demo', role: 'role-nurse', dept: 'dept-icu', ward: 'ward-micu', qual: 'B.Sc. Nursing', reg: 'DEMO-RN-001' },
-      { id: 'usr-demo-sup', empId: 'NF-DEMO-SUP', name: 'Nursing Supervisor Demo', email: 'headnurse@nurseflow.demo', role: 'role-supervisor', dept: 'dept-icu', ward: 'ward-micu', qual: 'M.Sc. Nursing', reg: 'DEMO-HN-001' },
-      { id: 'usr-demo-inv', empId: 'NF-DEMO-INV', name: 'Inventory Manager Demo', email: 'inventory@nurseflow.demo', role: 'role-inventory', dept: 'dept-admin', ward: null, qual: 'B.Pharm, Logistics Lead', reg: 'DEMO-INV-001' },
-      { id: 'usr-demo-admin', empId: 'NF-DEMO-ADM', name: 'System Administrator Demo', email: 'admin@nurseflow.demo', role: 'role-admin', dept: 'dept-admin', ward: null, qual: 'Hospital Administration Director', reg: 'DEMO-ADM-001' },
     ];
 
     const indianFirstNames = [
@@ -714,7 +715,7 @@ export function runSeed() {
       const creatorSupervisor = supUsers[t % supUsers.length].id;
 
       // Ensure some tasks are assigned to primary demo accounts for instant evaluation
-      const finalAssignee = (t <= 20) ? 'usr-priya' : (t <= 35 ? 'usr-mary' : (t <= 50 ? 'usr-ananya' : assignedNurse));
+      const finalAssignee = (t <= 25) ? 'usr-demo-nurse' : (t <= 40 ? 'usr-priya' : (t <= 55 ? 'usr-ananya' : assignedNurse));
       const status = taskStatuses[t % taskStatuses.length];
 
       // Realistic deadlines: some past (overdue or completed), some upcoming today/tomorrow
@@ -950,6 +951,27 @@ export function runSeed() {
         );
       }
     }
+
+    // Ensure active today's shift allocations for demonstration accounts
+    const todayStr = new Date().toISOString().split('T')[0];
+    assignStmt.run(
+      'sa-demo-nurse-today',
+      'shift-morn',
+      'usr-demo-nurse',
+      'ward-micu',
+      todayStr,
+      'ON_DUTY',
+      'Inpatient duty roster allocation - Medical ICU (MICU)'
+    );
+    assignStmt.run(
+      'sa-demo-sup-today',
+      'shift-morn',
+      'usr-demo-sup',
+      'ward-micu',
+      todayStr,
+      'ON_DUTY',
+      'Charge Nurse Shift In-Charge - Medical ICU (MICU)'
+    );
 
     // 17. Structured Handovers (250+ handovers over past 60 days)
     console.log('  Seeding 250+ structured ISBAR nursing handovers...');

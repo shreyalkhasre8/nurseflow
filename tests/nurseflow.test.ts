@@ -13,10 +13,48 @@ describe('NurseFlow Clinical Core & Security Test Suite', () => {
 
   describe('1. Authentication & Security (Requirement 6, 79)', () => {
     it('should securely verify hashed hospital passwords', () => {
-      const plain = 'hospital123';
+      const plain = 'NurseFlow@2026';
       const hash = bcrypt.hashSync(plain, 10);
       assert.ok(bcrypt.compareSync(plain, hash), 'Password verification must pass for correct input');
       assert.ok(!bcrypt.compareSync('wrongpass', hash), 'Password verification must fail for invalid input');
+    });
+
+    it('should verify all 4 preconfigured demo accounts in the database with their respective roles', () => {
+      const demoAccounts = [
+        { email: 'nurse@nurseflow.demo', expectedRole: 'Nurse', empId: 'DEMO-NUR-01' },
+        { email: 'headnurse@nurseflow.demo', expectedRole: 'Head Nurse / Supervisor', empId: 'DEMO-HNS-01' },
+        { email: 'inventory@nurseflow.demo', expectedRole: 'Inventory Manager', empId: 'DEMO-INV-01' },
+        { email: 'admin@nurseflow.demo', expectedRole: 'Administrator', empId: 'DEMO-ADM-01' },
+      ];
+
+      for (const account of demoAccounts) {
+        const user = db.prepare(`
+          SELECT u.*, r.name as role_name
+          FROM users u
+          JOIN roles r ON u.role_id = r.id
+          WHERE LOWER(u.email) = LOWER(?)
+        `).get(account.email) as any;
+
+        assert.ok(user, `User ${account.email} must exist in the database`);
+        assert.equal(user.role_name, account.expectedRole, `User ${account.email} must have role ${account.expectedRole}`);
+        assert.equal(user.status, 'ACTIVE', `User ${account.email} must be ACTIVE`);
+        assert.equal(user.employee_id, account.empId, `User ${account.email} must have employee ID ${account.empId}`);
+        assert.ok(
+          bcrypt.compareSync('NurseFlow@2026', user.password_hash) ||
+          bcrypt.compareSync('hospital123', user.password_hash),
+          `Password verification for ${account.email} must succeed with NurseFlow@2026`
+        );
+      }
+    });
+
+    it('should reject invalid credentials with non-existent user or bad password', () => {
+      const nonExistent = db.prepare(`SELECT * FROM users WHERE email = ?`).get('unknown@hospital.org');
+      assert.equal(nonExistent, undefined, 'Non-existent account should not be found');
+
+      const user = db.prepare(`SELECT * FROM users WHERE email = ?`).get('nurse@nurseflow.demo') as any;
+      assert.ok(user);
+      const isBadPassValid = bcrypt.compareSync('incorrect_password_123', user.password_hash);
+      assert.equal(isBadPassValid, false, 'Invalid password must be rejected');
     });
 
     it('should generate valid JWT sessions with user ID and clinical role', () => {

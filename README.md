@@ -63,7 +63,7 @@ Relational Persistence Layer (SQLite via better-sqlite3 with WAL & Foreign Keys 
 - **Head Nurse / Supervisor**: Shift roster scheduling, task assignment, workload distribution, urgent escalations review, stock approvals.
 - **Inventory Manager**: Central pharmacy management, batch lots, consignment receiving, ward issues, returns, reconciliation, expiry rotation (FEFO).
 - **Administrator**: Staff user accounts, role and ward configurations, department settings, forensic audit logs.
-- **1-Click Clinical Role Switcher**: Top preview bar allows instantaneous switching between personas during viva demonstrations.
+- **Automatic Role Determination & Redirection**: User credentials authenticate against the database, dynamically determining access permissions and redirecting directly to the dedicated role dashboard (Nurse, Supervisor, Inventory Manager, Administrator).
 
 ### 2. Clinical Task Management
 - High-density filterable grid (Ward, Category, Priority, Status, Overdue).
@@ -148,20 +148,24 @@ Relational Persistence Layer (SQLite via better-sqlite3 with WAL & Foreign Keys 
 
 ## 🔑 Demonstration Accounts
 
-All demo accounts share the password: **`hospital123`**
+All preconfigured clinical demonstration accounts share the documented demo password: **`NurseFlow@2026`**
 
-| Staff Member | Role | Department / Ward | Email / Employee ID |
-| :--- | :--- | :--- | :--- |
-| **Priya Sharma** | Nurse | Medical ICU (MICU) | `priya.sharma@nurseflow.local` (`NF-NUR-101`) |
-| **Sister Mary Thomas** | Nurse | Female Surgical Ward | `mary.thomas@nurseflow.local` (`NF-NUR-102`) |
-| **Ananya Patel** | Nurse | Emergency & Trauma | `ananya.patel@nurseflow.local` (`NF-NUR-103`) |
-| **Deepa Nair** | Nurse | Male Medical Ward | `deepa.nair@nurseflow.local` (`NF-NUR-104`) |
-| **Sunita Rao** | Head Nurse / Supervisor | Intensive Care Unit | `sunita.rao@nurseflow.local` (`NF-SUP-201`) |
-| **Sneha Kulkarni** | Head Nurse / Supervisor | General Surgery | `sneha.kulkarni@nurseflow.local` (`NF-SUP-202`) |
-| **Rajesh Kumar** | Inventory Manager | Central Stores & Pharmacy | `rajesh.kumar@nurseflow.local` (`NF-INV-301`) |
-| **Dr. Ramesh Hegde** | Administrator | Hospital Administration | `admin@nurseflow.local` (`NF-ADM-401`) |
+| Clinical Persona | Role | Department / Ward | Email | Employee ID | Dedicated Dashboard |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Sister Sarah Jenkins** | **Nurse** | Medical ICU (MICU) | `nurse@nurseflow.demo` | `DEMO-NUR-01` | **Nurse Dashboard** (My Shift Tasks, Registers, Handover) |
+| **Sister Sunita Rao** | **Head Nurse / Supervisor** | Medical ICU (MICU) | `headnurse@nurseflow.demo` | `DEMO-HNS-01` | **Supervisor Dashboard** (Workload, Delegation, Approvals) |
+| **Rajesh Kumar** | **Inventory Manager** | Pharmacy & Stores | `inventory@nurseflow.demo` | `DEMO-INV-01` | **Inventory Dashboard** (Batches, Expiry, Ledger, Indents) |
+| **Dr. Ramesh Hegde** | **Administrator** | Hospital Admin | `admin@nurseflow.demo` | `DEMO-ADM-01` | **Admin Dashboard** (Users, Roles, Wards, Forensic Audit) |
 
-*Tip: Use the top **1-Click Demo Role Switcher Bar** on any page to switch between personas instantly without logging out!*
+> [!NOTE]
+> **Synthetic Demonstration Data Notice**: All demonstration accounts operate exclusively on realistic synthetic healthcare data and simulated hospital beds in compliance with NABH, HIPAA, and patient privacy standards. No real patient health information (PHI) is stored or exposed.
+
+### Creating or Resetting Demonstration Accounts
+To populate or restore the database to its pristine preconfigured state:
+```bash
+npm run seed
+```
+This executes the relational seed script (`server/seed.ts`), initializing all 4 demo profiles, active clinical wards, 150 synthetic census records, 120 SKUs, 750+ linked tasks, 600+ digital registers, and 1,200+ inventory ledger transactions.
 
 ---
 
@@ -177,23 +181,30 @@ npm test
 
 ## 🎯 Viva Demonstration Script (Walkthrough for Examiners)
 
-1. **Login as Nurse (Priya Sharma)**:
-   - View personalized **Nurse Dashboard** with current shift timing, personal tasks due, and pending handover alerts.
+1. **Sign in as Staff Nurse (`nurse@nurseflow.demo` / `NurseFlow@2026`)**:
+   - The system automatically authenticates from the database and routes to the **Nurse Dashboard** with current shift timing, personal tasks due, and pending handover alerts.
    - Go to **Tasks**, click a pending medication task (`IV Ceftriaxone 1g`), start it, and sign it off as completed with notes.
    - Go to **Registers**, select `Daily Nursing Activity Register`, create an entry for Bed 4, then amend it to demonstrate **non-destructive version history**.
    - Go to **Inventory**, click **Request Stock Indent** to requisition 30 Normal Saline bottles for MICU.
-2. **Switch to Inventory Manager (Rajesh Kumar)**:
-   - View the **Inventory Manager Dashboard** with live SKUs, low-stock alerts, near-expiry lots, and pending requisitions.
-   - Review Priya's requisition and click **Approve Indent**.
+   - Click user profile menu ➔ **Sign Out**.
+
+2. **Sign in as Inventory Manager (`inventory@nurseflow.demo` / `NurseFlow@2026`)**:
+   - System automatically detects role and opens **Inventory Manager Dashboard** with live SKUs, low-stock alerts, near-expiry lots, and pending requisitions.
+   - Review pending ward requisitions and click **Approve Indent**.
    - Click **Import CSV**, upload a CSV file or download the template, review the live validation preview, and confirm the import.
    - Click **Export CSV** to download the updated catalog.
-3. **Switch to Head Nurse / Supervisor (Sunita Rao)**:
-   - View the **Supervisor Dashboard** displaying active census, staff on shift, and ward workload.
+   - Click user profile menu ➔ **Sign Out**.
+
+3. **Sign in as Head Nurse / Supervisor (`headnurse@nurseflow.demo` / `NurseFlow@2026`)**:
+   - System automatically routes to **Supervisor Dashboard** displaying active census, staff on shift, and ward workload.
    - Go to **Shift & Handover**, view the outgoing shift report, and acknowledge it with a legal timestamp.
    - Go to **Reports**, switch between **Task Performance**, **Overdue Tasks**, **Workload**, and **Stock Movement**, and click **Print Report (PDF)**.
-4. **Switch to Administrator (Dr. Ramesh Hegde)**:
-   - View the **Admin Dashboard** with system metrics, ward bed occupancy meters, and live forensic telemetry.
+   - Click user profile menu ➔ **Sign Out**.
+
+4. **Sign in as Administrator (`admin@nurseflow.demo` / `NurseFlow@2026`)**:
+   - System routes directly to **Admin Dashboard** with system metrics, ward bed occupancy meters, and live forensic telemetry.
    - Go to **Administration**, view the **Audit Logs** table showing complete tracking of every previous action.
+   - Inspect user accounts and ward management.
 
 ---
 

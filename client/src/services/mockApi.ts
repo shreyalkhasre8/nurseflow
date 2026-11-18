@@ -106,28 +106,27 @@ export async function handleMockApi<T>(endpoint: string, options: RequestInit = 
 
   // Auth: /auth/login
   if (path === '/auth/login' && method === 'POST') {
-    const { username } = body;
+    const { username, password } = body;
     const cleanUsername = (username || '').trim().toLowerCase();
+
+    if (!cleanUsername || !password) {
+      throw new Error('Please provide both Employee ID / Email and Shift Access Password.');
+    }
     
     // Find matching user by email or employee ID
     let user = store.users.find(
       (u) =>
         u.email.toLowerCase() === cleanUsername ||
-        u.employeeId.toLowerCase() === cleanUsername ||
-        cleanUsername.includes(u.email.split('@')[0].toLowerCase())
+        u.employeeId.toLowerCase() === cleanUsername
     );
 
     if (!user) {
-      // Default fallback to Sunita Rao (Supervisor) or Priya Sharma (Nurse)
-      if (cleanUsername.includes('admin')) {
-        user = store.users.find((u) => u.role === 'Administrator') || store.users[3];
-      } else if (cleanUsername.includes('inv') || cleanUsername.includes('kumar') || cleanUsername.includes('pharm')) {
-        user = store.users.find((u) => u.role === 'Inventory Manager') || store.users[2];
-      } else if (cleanUsername.includes('sunita') || cleanUsername.includes('hns') || cleanUsername.includes('sup')) {
-        user = store.users.find((u) => u.role === 'Head Nurse / Supervisor') || store.users[0];
-      } else {
-        user = store.users.find((u) => u.role === 'Nurse') || store.users[1];
-      }
+      throw new Error('Invalid credentials. Clinical staff account not found in hospital registry.');
+    }
+
+    // Verify development/demo password (NurseFlow@2026 or legacy hospital123)
+    if (password !== 'NurseFlow@2026' && password !== 'hospital123') {
+      throw new Error('Invalid credentials. Please verify your shift access password.');
     }
 
     store.currentUser = user;
@@ -184,8 +183,8 @@ export async function handleMockApi<T>(endpoint: string, options: RequestInit = 
 
   // Tasks: /tasks/my
   if (path === '/tasks/my') {
-    const currentId = store.currentUser?.id || 'usr-nrs-001';
-    let myTasks = store.tasks.filter((t) => t.assigned_to === currentId || t.assigned_to === 'usr-nrs-001');
+    const currentId = store.currentUser?.id || 'usr-demo-nurse';
+    let myTasks = store.tasks.filter((t) => t.assigned_to === currentId || t.assigned_to === 'usr-demo-nurse' || t.assigned_to === 'usr-nrs-001');
     const statusFilter = query.get('status');
     if (statusFilter) {
       myTasks = myTasks.filter((t) => t.status.toLowerCase() === statusFilter.toLowerCase());
